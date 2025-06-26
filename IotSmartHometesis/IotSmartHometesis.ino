@@ -20,6 +20,8 @@ V7 == cooling degree days status
 // Konfigurasi dengan esp dan blynk serta pemanggilan fungsi wifi
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
+#include "TRIGGER_WIFI.h"
+#include "TRIGGER_GOOGLESHEETS.h"
 #include <MHZ19.h>
 #include <HardwareSerial.h>
 #include "DHT.h"
@@ -35,10 +37,15 @@ bool cekdata = false;
 float total = 0.0;
 float suhuacuan = 26.0;
 int i;
+int total;
 char ssid[] = "YourWiFi";
 char pass[] = "YourPassword";
 DHT dht1(PINDHT1,tipeDHT);
 DHT dht(PINDHT,tipeDHT);
+//Data
+char namakolom[] [] = {"value1","value2","value3"};
+const String scriptURL = "https://script.google.com/macros/s/AKfycbwUGXXzKwFyqs_TdHD2x5Z7sfePzlRDmXgWyJjREmN6L8H5x16UcXMrnzcSzUiRCIXl/exec";
+int parameter=3;
 
 HardwareSerial mySerial(1);
 MHZ19 myMHZ19;
@@ -153,11 +160,17 @@ void setup()
   timer.setInterval(5000L, suhusuhu);     // DHT luar
   timer.setInterval(300L, simpansuhu1);       
   timer.setInterval(30000L, coolingdds);    // hitung setiap 31 detik
+  Google_Sheets_Init(namakolom,scriptURL,parameter);
 }
   }
 
 void loop()
 {
+  float celcius1 = dht1.readTemperature();
+  float humidity1 = dht1.readHumidity();
   Blynk.run();
   timer.run();
+  Data_to_Sheets (parameter, celcius1, humidity1, total);
+  Serial.println();
+  delay(1000);
 }
