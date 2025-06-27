@@ -20,14 +20,18 @@ V7 == cooling degree days status
 // Konfigurasi dengan esp dan blynk serta pemanggilan fungsi wifi
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
+#include <BH1750.h>
+BH1750 lightMeter;
 #include <HTTPClient.h>
 #include <MHZ19.h>
+#include <Wire.h>
 #include <HardwareSerial.h>
 #include "DHT.h"
 //define dht untuk suhu
 #define PINDHT1 15 //PInDalam
 #define PINDHT  2 //PinLuar
 #define tipeDHT DHT22
+//parameter cahaya bh1750
 
 //define degree days
 float datasuhu[100];
@@ -37,8 +41,8 @@ float total = 0.0;
 float suhuacuan = 26.0;
 int i;
 //int total;
-char ssid[] = "Mandala 106";
-char pass[] = "Nugraha1";
+char ssid[] = "Rina";
+char pass[] = "Haribasa";
 DHT dht1(PINDHT1,tipeDHT);
 DHT dht(PINDHT,tipeDHT);
 
@@ -52,30 +56,6 @@ HardwareSerial mySerial(1);
 MHZ19 myMHZ19;
 
 BlynkTimer timer;
-
-void kirimKeSpreadsheet(float suhu, float hum, float cdd) {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    
-    String url = String(spreadsheetId);
-    url += "?suhu=" + String(suhu, 2);
-    url += "&hum=" + String(hum, 2);
-    url += "&cdd=" + String(cdd, 2);
-
-    http.begin(url);
-    int httpCode = http.GET();
-
-    if (httpCode > 0) {
-      Serial.println("Data terkirim ke Google Sheet!");
-    } else {
-      Serial.print("Gagal kirim. Kode: ");
-      Serial.println(httpCode);
-    }
-    http.end();
-  } else {
-    Serial.println("WiFi belum terkoneksi.");
-  }
-}
 
 void sendSensor()
 {
@@ -164,6 +144,31 @@ void coolingdds(){
   }
 
   Blynk.virtualWrite(V7, cdd);
+  
+//FUNGSI KIRIM KE SPREADSHEET
+void kirimKeSpreadsheet(float suhu, float hum, float cdd) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    String url = String(spreadsheetId);
+    url += "?suhu=" + String(suhu, 2);
+    url += "&hum=" + String(hum, 2);
+    url += "&cdd=" + String(cdd, 2);
+
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      Serial.println("Data terkirim ke Google Sheet!");
+    } else {
+      Serial.print("Gagal kirim. Kode: ");
+      Serial.println(httpCode);
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi belum terkoneksi.");
+  }
+}
 
   // Kirim ke spreadsheet
   float suhu = dht1.readTemperature();
@@ -176,13 +181,29 @@ void coolingdds(){
 
 
 //Otomatisasi Cooling degree days
+//LUXX
+void luxx() {
+  float lux = lightMeter.readLightLevel();
+
+  if (lux < 0 || isnan(lux)) {
+    Serial.println("[BH1750] Gagal membaca lux");
+    Blynk.virtualWrite(V8, "Sensor Error");
+    return;
+  }
+
+  Serial.print("Lux: ");
+  Serial.println(lux);
+  Blynk.virtualWrite(V8, lux);
+}
+
 
 
 
 void setup()
 {
   Serial.begin(115200);
- 
+  Wire.begin(21,22);
+  lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
   // Mulai komunikasi dengan MH-Z19 (GPIO16 RX, GPIO17 TX)
   mySerial.begin(9600, SERIAL_8N1, 16, 17);
   myMHZ19.begin(mySerial);
@@ -195,6 +216,7 @@ void setup()
   timer.setInterval(5000L, suhusuhu);     // DHT luar
   timer.setInterval(300L, simpansuhu1);       
   timer.setInterval(30000L, coolingdds);    // hitung setiap 31 detik
+  timer.setInterval(5000L,luxx);
   /*Google_Sheets_Init(namakolom,scriptURL,parameter);*/
 }
   
