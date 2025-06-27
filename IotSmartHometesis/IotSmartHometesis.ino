@@ -14,20 +14,19 @@ V6
 V7 == cooling degree days status
 */
 
-#define BLYNK_TEMPLATE_ID "TMPLxxxxxxx"
-#define BLYNK_TEMPLATE_NAME "Monitoring CO2"
-#define BLYNK_AUTH_TOKEN "YourAuthToken"
+#define BLYNK_TEMPLATE_ID "TMPL66GCr3BNH"
+#define BLYNK_TEMPLATE_NAME "Smart Technology Energi Plus"
+#define BLYNK_AUTH_TOKEN "-9OboKtlNxrHL4O6Fwk8kPEm3AaAz1hQ"
 // Konfigurasi dengan esp dan blynk serta pemanggilan fungsi wifi
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
-#include "TRIGGER_WIFI.h"
-#include "TRIGGER_GOOGLESHEETS.h"
+#include <HTTPClient.h>
 #include <MHZ19.h>
 #include <HardwareSerial.h>
 #include "DHT.h"
 //define dht untuk suhu
-#define PINDHT1 * //PInDalam
-#define PINDHT  * //PinLuar
+#define PINDHT1 15 //PInDalam
+#define PINDHT  2 //PinLuar
 #define tipeDHT DHT22
 
 //define degree days
@@ -37,20 +36,46 @@ bool cekdata = false;
 float total = 0.0;
 float suhuacuan = 26.0;
 int i;
-int total;
-char ssid[] = "YourWiFi";
-char pass[] = "YourPassword";
+//int total;
+char ssid[] = "Mandala 106";
+char pass[] = "Nugraha1";
 DHT dht1(PINDHT1,tipeDHT);
 DHT dht(PINDHT,tipeDHT);
-//Data
-char namakolom[] [] = {"value1","value2","value3"};
+
+/*Data
+char namakolom[] [20] = {"value1","value2","value3"};
 const String scriptURL = "https://script.google.com/macros/s/AKfycbwUGXXzKwFyqs_TdHD2x5Z7sfePzlRDmXgWyJjREmN6L8H5x16UcXMrnzcSzUiRCIXl/exec";
 int parameter=3;
-
+*/
+const char spreadsheetId[] = "https://script.google.com/macros/s/AKfycbyI9xSdwC4FKMj80JTWPCBMAaa-T1AAnRphRpV-DkvHujKbXNnZptB963KBqkFhp9r8/exec";
 HardwareSerial mySerial(1);
 MHZ19 myMHZ19;
 
 BlynkTimer timer;
+
+void kirimKeSpreadsheet(float suhu, float hum, float cdd) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    String url = String(spreadsheetId);
+    url += "?suhu=" + String(suhu, 2);
+    url += "&hum=" + String(hum, 2);
+    url += "&cdd=" + String(cdd, 2);
+
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      Serial.println("Data terkirim ke Google Sheet!");
+    } else {
+      Serial.print("Gagal kirim. Kode: ");
+      Serial.println(httpCode);
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi belum terkoneksi.");
+  }
+}
 
 void sendSensor()
 {
@@ -122,22 +147,32 @@ void simpansuhu1(){
 //PERHITUNGAN COOLING DEGREE DAYS FUNGSI2
 void coolingdds(){
   if(!cekdata) return;
+
   float suhumin = datasuhu[0];
   float suhumax = datasuhu[0];
   for(i = 0;i<100;i++){
     if(datasuhu[i]< suhumin) suhumin = datasuhu[i];
     if(datasuhu[i]> suhumax) suhumax = datasuhu[i];
   }
-  float rata = ((suhumin+suhumax)/2.0);
-  float cdd =0;
 
-  if(rata > suhuacuan){
-    cdd = rata -suhuacuan;
-    total =+ cdd;
-      }
-//Kualifikasi pemanggilan blynk dengan cooling degree days
-Blynk.virtualWrite(V7, total);
+  float rata = ((suhumin + suhumax) / 2.0);
+  float cdd = 0;
+
+  if (rata > suhuacuan) {
+    cdd = rata - suhuacuan;
+    total += cdd;  // perbaiki += bukan =+
+  }
+
+  Blynk.virtualWrite(V7, cdd);
+
+  // Kirim ke spreadsheet
+  float suhu = dht1.readTemperature();
+  float hum = dht1.readHumidity();
+  if (!isnan(suhu) && !isnan(hum)) {
+    kirimKeSpreadsheet(suhu, hum, cdd);
+  }
 }
+
 
 
 //Otomatisasi Cooling degree days
@@ -160,9 +195,9 @@ void setup()
   timer.setInterval(5000L, suhusuhu);     // DHT luar
   timer.setInterval(300L, simpansuhu1);       
   timer.setInterval(30000L, coolingdds);    // hitung setiap 31 detik
-  Google_Sheets_Init(namakolom,scriptURL,parameter);
+  /*Google_Sheets_Init(namakolom,scriptURL,parameter);*/
 }
-  }
+  
 
 void loop()
 {
@@ -170,7 +205,7 @@ void loop()
   float humidity1 = dht1.readHumidity();
   Blynk.run();
   timer.run();
-  Data_to_Sheets (parameter, celcius1, humidity1, total);
+  /*Data_to_Sheets(parameter, celcius1, humidity1, total);*/
   Serial.println();
   delay(1000);
 }
