@@ -31,6 +31,7 @@ BH1750 lightMeter;
 #define PINDHT1 15 //PInDalam
 #define PINDHT  2 //PinLuar
 #define tipeDHT DHT22
+#define relayy 4
 //parameter cahaya bh1750
 
 //define degree days
@@ -45,7 +46,8 @@ char ssid[] = "Rina";
 char pass[] = "Haribasa";
 DHT dht1(PINDHT1,tipeDHT);
 DHT dht(PINDHT,tipeDHT);
-
+//otomatisasi
+int otomatisasi;
 /*Data
 char namakolom[] [20] = {"value1","value2","value3"};
 const String scriptURL = "https://script.google.com/macros/s/AKfycbwUGXXzKwFyqs_TdHD2x5Z7sfePzlRDmXgWyJjREmN6L8H5x16UcXMrnzcSzUiRCIXl/exec";
@@ -56,6 +58,33 @@ HardwareSerial mySerial(1);
 MHZ19 myMHZ19;
 
 BlynkTimer timer;
+  
+//FUNGSI KIRIM KE SPREADSHEET
+void kirimKeSpreadsheet(float suhu, float hum, float cdd) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    String url = String(spreadsheetId);
+    url += "?suhu=" + String(suhu, 2);
+    url += "&hum=" + String(hum, 2);
+    url += "&cdd=" + String(cdd, 2);
+
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      Serial.println("Data terkirim ke Google Sheet!");
+    } else {
+      Serial.print("Gagal kirim. Kode: ");
+      Serial.println(httpCode);
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi belum terkoneksi.");
+  }
+}
+
+
 
 void sendSensor()
 {
@@ -144,43 +173,40 @@ void coolingdds(){
   }
 
   Blynk.virtualWrite(V7, cdd);
-  
-//FUNGSI KIRIM KE SPREADSHEET
-void kirimKeSpreadsheet(float suhu, float hum, float cdd) {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    
-    String url = String(spreadsheetId);
-    url += "?suhu=" + String(suhu, 2);
-    url += "&hum=" + String(hum, 2);
-    url += "&cdd=" + String(cdd, 2);
-
-    http.begin(url);
-    int httpCode = http.GET();
-
-    if (httpCode > 0) {
-      Serial.println("Data terkirim ke Google Sheet!");
-    } else {
-      Serial.print("Gagal kirim. Kode: ");
-      Serial.println(httpCode);
-    }
-    http.end();
-  } else {
-    Serial.println("WiFi belum terkoneksi.");
-  }
-}
 
   // Kirim ke spreadsheet
   float suhu = dht1.readTemperature();
   float hum = dht1.readHumidity();
   if (!isnan(suhu) && !isnan(hum)) {
     kirimKeSpreadsheet(suhu, hum, cdd);
+  }}
+
+//Otomatisasi Cooling degree days
+
+//otomatisasi BH1750 lampu
+BLYNK_WRITE(V10){
+  otomatisasi = param.asInt();
+}void relay() {
+  int ldd = lightMeter.readLightLevel();
+ 
+  if (otomatisasi == 1) {
+    if (ldd > 0 && ldd<200) {
+      digitalWrite(relayy, HIGH);
+    } else if(ldd>200) {
+      digitalWrite(relayy, LOW);
+    }
+  }
+  if (otomatisasi == 0) {
+    BLYNK_WRITE(V11);
   }
 }
 
+BLYNK_WRITE(V11) {
+  int del = param.asInt();
+  digitalWrite(relayy, del);
+}
 
 
-//Otomatisasi Cooling degree days
 //LUXX
 void luxx() {
   float lux = lightMeter.readLightLevel();
@@ -205,6 +231,8 @@ void setup()
   Wire.begin(21,22);
   lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
   // Mulai komunikasi dengan MH-Z19 (GPIO16 RX, GPIO17 TX)
+  pinMode(relayy,OUTPUT);
+
   mySerial.begin(9600, SERIAL_8N1, 16, 17);
   myMHZ19.begin(mySerial);
   myMHZ19.autoCalibration();
@@ -217,6 +245,7 @@ void setup()
   timer.setInterval(300L, simpansuhu1);       
   timer.setInterval(30000L, coolingdds);    // hitung setiap 31 detik
   timer.setInterval(5000L,luxx);
+  timer.setInterval(3000L, relay); 
   /*Google_Sheets_Init(namakolom,scriptURL,parameter);*/
 }
   
