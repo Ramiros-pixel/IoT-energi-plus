@@ -16,7 +16,7 @@ V7 == cooling degree days status
 
 #define BLYNK_TEMPLATE_ID "TMPL66GCr3BNH"
 #define BLYNK_TEMPLATE_NAME "Smart Technology Energi Plus"
-#define BLYNK_AUTH_TOKEN "-9OboKtlNxrHL4O6Fwk8kPEm3AaAz1hQ"
+#define BLYNK_AUTH_TOKEN "-9OboKtlNxrHL4O6Fwk8kPEm3AaAz1h"
 // Konfigurasi dengan esp dan blynk serta pemanggilan fungsi wifi
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
@@ -42,18 +42,18 @@ float total = 0.0;
 float suhuacuan = 26.0;
 int i;
 //int total;
-char ssid[] = "Rina";
-char pass[] = "Haribasa";
+char ssid[] = "";
+char pass[] = "";
 DHT dht1(PINDHT1,tipeDHT);
 DHT dht(PINDHT,tipeDHT);
 //otomatisasi
 int otomatisasi;
 /*Data
 char namakolom[] [20] = {"value1","value2","value3"};
-const String scriptURL = "https://script.google.com/macros/s/AKfycbwUGXXzKwFyqs_TdHD2x5Z7sfePzlRDmXgWyJjREmN6L8H5x16UcXMrnzcSzUiRCIXl/exec";
+const String scriptURL = "https://script.google.com/macros/s/AKfycbwUGXXzKwFyqs_TdHD2x5Z7sfePzlRDmXgWyJjREmN6L8H5x16UcXMrnzcSzUiRCI";
 int parameter=3;
 */
-const char spreadsheetId[] = "https://script.google.com/macros/s/AKfycbyI9xSdwC4FKMj80JTWPCBMAaa-T1AAnRphRpV-DkvHujKbXNnZptB963KBqkFhp9r8/exec";
+const char spreadsheetId[] = "https://script.google.com/macros/s/AKfycbyI9xSdwC4FKMj80JTWPCBMAaa-T1AAnRphRpV-DkvHujKbXNnZc";
 HardwareSerial mySerial(1);
 MHZ19 myMHZ19;
 
