@@ -31,13 +31,13 @@ const int FILTER_COUNT = 5;
 int sensorBuf[FILTER_COUNT];
 int bufIdx = 0;
 bool status_hujan = false;
+bool ac = false;
 unsigned long lastChangeTime = 0;
 const unsigned long debounceDelay = 3000; 
 
 // ------------------ WIFI DAN BLYNK -------------------
 char ssid[] = "Mandala 106";
 char pass[] = "Nugraha1";
-BlynkTimer timer;
 // ---------define seluruh----------------------
 float suhu = 0;
 float hum = 0;
@@ -72,6 +72,7 @@ DHT dht1(PINDHT1, tipeDHT);
 DHT dht(PINDHT, tipeDHT);
 BH1750 lightMeter;
 Servo kanopi;
+bool otomatisasiKanopi = false;
 
 // ------------------Variable CDD -------------------
 float datasuhu[100];
@@ -148,10 +149,10 @@ void suhusuhu() {
  humadity = dht.readHumidity();
 
   if (isnan(celcius) || isnan(humadity)) {
-    Blynk.virtualWrite(V4, "Sensor Failed");
+    Serial.println("sensor dht luar error");
     return;
   }
-  Blynk.virtualWrite(V4, "Success status sensor");
+  Serial.println("sensor dht luar berhasil");
   Blynk.virtualWrite(V5, celcius);
   Blynk.virtualWrite(V6, humadity);
 }
@@ -161,10 +162,10 @@ float celcius1 = dht1.readTemperature();
 float humadity1 = dht1.readHumidity();
 
   if (isnan(celcius1) || isnan(humadity1)) {
-    Blynk.virtualWrite(V4, "Sensor Failed");
+    Serial.println("sensor dht dalam error");
     return;
   }
-  Blynk.virtualWrite(V4, "Success status sensor");
+  Serial.println("sensor dht dalam berhasil");
   Blynk.virtualWrite(V0, celcius1);
   Blynk.virtualWrite(V1, humadity1);
 }
@@ -209,26 +210,43 @@ void kirimSuhu(uint16_t* rawData, int length) {
 }
 
 BLYNK_WRITE(V12){
-  otomatisasiAC = param.asInt();
+  ac = param.asInt();
 } 
 
-//-V belum di setting 
+void kirimIRKanopi(uint16_t* rawData, int length) {
+  irsend.sendRaw(rawData, length, 38); // 38 kHz biasanya default remote IR
+  Serial.println("IR kanopi terkirim.");
+}
+
+//------Manual Kanopi -------------
+BLYNK_WRITE(V23) {  
+  if (ac == 0) {   // hanya manual
+    kirimIRKanopi(rawNaik, sizeof(rawNaik) / sizeof(rawNaik[0]));
+    Serial.println("BLYNK -> Kanopi Naik (Manual)");
+  }
+}
+
+BLYNK_WRITE(V22) {  
+  if (ac == 0) {   // hanya manual
+    kirimIRKanopi(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0]));
+    Serial.println("BLYNK -> Kanopi Turun (Manual)");
+  }
+}
 
 void otomatisasiAC(){
  float suhu = dht1.readTemperature();
  float acuan_suhu = cdd;
- bool otomatisasi = otomatisasiAC;
-  if (otomatisasi == 1){
+  if (ac == 1){
      if(millis()- lastChangeTime >= 300000){
       if(suhu > acuan_suhu ){
         Serial.println("suhu akan dinaikan");
         kirimSuhu(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0]));
-        lastSendTime = millis();
+        lastChangeTime = millis();
       }
       else if(suhu < acuan_suhu){
         Serial.println("suhu akan diturunkan");
         kirimSuhu(rawNaik, sizeof(rawNaik) / sizeof(rawNaik[0]));
-        lastSendTime = millis();
+        lastChangeTime = millis();
 
  }
  }
@@ -239,14 +257,10 @@ BLYNK_WRITE(V21) { kirimSuhu(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0])); 
 //UNTUK BLYNK BELUM DI SESUAIKAN V nya
 
 BLYNK_WRITE(V10) {
-  otomatisasi = param.asInt();
+  bool otomatisasiKanopi = param.asInt();
 }
 
 
-BLYNK_WRITE(V11) {
-  int del = param.asInt();
-  digitalWrite(relayy, del);
-}
 
 void luxx() {
   lux = lightMeter.readLightLevel();
@@ -257,7 +271,20 @@ void luxx() {
   Blynk.virtualWrite(V8, lux);
 }
 
+//------------------Manual Kanopi-------------------
+BLYNK_WRITE(V20) {
+  
+  if (otomatisasiKanopi == 0) {   // hanya jalan kalau mode manual
+    int drajat  = param.asInt();
+    kanopi.write(drajat);
+    Serial.print("Drajat Kanopi (Manual Blynk): ");
+    Serial.println(drajat);
+  } else {
+    Serial.println("Mode otomatis (sensor hujan aktif), kontrol Blynk diabaikan");
+  }
+}
 void Sensorhujan() {
+
   int hujan_sensor = analogRead(sensorHujan);
   unsigned long currentMillis = millis();
 
@@ -271,32 +298,35 @@ void Sensorhujan() {
   Serial.println(lastChangeTime);
 
   // HUJAN - Putar ke arah menutup
-  if (hujan_sensor <= 2000 && status_hujan == false && (currentMillis - lastChangeTime > debounceDelay)) {
-    Serial.println("Deteksi hujan || Menutup kanopi (putar servo)...");
 
-    kanopi.write(90); 
-    delay(2000);     
-    kanopi.write(10); 
-    Serial.println("Servo berhenti setelah menutup");
+  if(otomatisasiKanopi == 1){
+    if (hujan_sensor <= 2000 && status_hujan == false && (currentMillis - lastChangeTime > debounceDelay)) {
+      Serial.println("Deteksi hujan || Menutup kanopi (putar servo)...");
 
-    status_hujan = true;
-    lastChangeTime = currentMillis;
+      kanopi.write(90); 
+      delay(2000);     
+      kanopi.write(10); 
+      Serial.println("Servo berhenti setelah menutup");
+
+      status_hujan = true;
+      lastChangeTime = currentMillis;
+    }
+  
+    // CERAH - Putar ke arah membuka
+    else if (hujan_sensor > 2000 && status_hujan == true && (currentMillis - lastChangeTime > debounceDelay)) {
+      Serial.println("Cerah || Membuka kanopi (putar servo)...");
+
+      kanopi.write(10); 
+      delay(2000);       
+      kanopi.write(90);  
+      Serial.println("Servo berhenti setelah membuka");
+
+      status_hujan = false;
+      lastChangeTime = currentMillis;
+    }
   }
 
-  // CERAH - Putar ke arah membuka
-  else if (hujan_sensor > 2000 && status_hujan == true && (currentMillis - lastChangeTime > debounceDelay)) {
-    Serial.println("Cerah || Membuka kanopi (putar servo)...");
-
-    kanopi.write(10); 
-    delay(2000);       
-    kanopi.write(90);  
-    Serial.println("Servo berhenti setelah membuka");
-
-    status_hujan = false;
-    lastChangeTime = currentMillis;
-  }
 }
-
 
 void finaldata(){
   celcius = dht.readTemperature();
