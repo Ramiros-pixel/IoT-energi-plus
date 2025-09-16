@@ -213,22 +213,17 @@ BLYNK_WRITE(V12){
   ac = param.asInt();
 } 
 
-void kirimIRKanopi(uint16_t* rawData, int length) {
-  irsend.sendRaw(rawData, length, 38); // 38 kHz biasanya default remote IR
-  Serial.println("IR kanopi terkirim.");
-}
-
 //------Manual Kanopi -------------
 BLYNK_WRITE(V23) {  
   if (ac == 0) {   // hanya manual
-    kirimIRKanopi(rawNaik, sizeof(rawNaik) / sizeof(rawNaik[0]));
+    kirimSuhu(rawNaik, sizeof(rawNaik) / sizeof(rawNaik[0]));
     Serial.println("BLYNK -> Kanopi Naik (Manual)");
   }
 }
 
 BLYNK_WRITE(V22) {  
   if (ac == 0) {   // hanya manual
-    kirimIRKanopi(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0]));
+    kirimSuhu(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0]));
     Serial.println("BLYNK -> Kanopi Turun (Manual)");
   }
 }
