@@ -1,10 +1,4 @@
-/*UNTUK SENSOR SUHU LUAR MENGGUNAKAN KONFIGURASI STREAM UNTUK V 10 DAN 11 
-SEBAGAI PEMBACAAN CO2 DAN SUHU PADA SENSOR
-PIN 13 UNTUK ESP32
 
-PERHATIKAN UNTUK OTOMATISASI BLYNK BELUM ADA V YANG SESUAI TOLONG SESUAIKAN
-KANOPI
-*/
 #define BLYNK_TEMPLATE_ID "TMPL6fsU0p9IY"
 #define BLYNK_TEMPLATE_NAME "Smart Energy Plus Monitoring"
 #define BLYNK_AUTH_TOKEN "Z6HkJe8ogi0dMJOCQT3u2evirF-r3m2M"
@@ -114,6 +108,7 @@ void kirimKeSpreadsheet(float suhu, float hum, float cdd,float lux,float co2, fl
   }
 }
 
+//------------------ Fungsi Co2 -------------
 void sendSensorluar(){
   co2_2 = mhz19_2.getCO2();
   temp_2 = mhz19_2.getTemperature();
@@ -144,6 +139,8 @@ int err = mhz19.errorCode;
   Blynk.virtualWrite(V3, temp);
 }
 
+
+//------------------ Fungsi DHT -------------
 void suhusuhu() {
  celcius = dht.readTemperature();
  humadity = dht.readHumidity();
@@ -170,6 +167,8 @@ float humadity1 = dht1.readHumidity();
   Blynk.virtualWrite(V1, humadity1);
 }
 
+
+//------------------ Fungsi CDD -------------
 void simpansuhu1() {
 suhu = dht1.readTemperature();
 hum = dht1.readHumidity();
@@ -203,7 +202,7 @@ void coolingdds() {
  
 }
 
-//------Otomatisasi AC -------------
+//------------------ AC MULAI PROGRAM --------------
 void kirimSuhu(uint16_t* rawData, int length) {
   irsend.sendRaw(rawData, length, 38);
   Serial.println("IR dikirim berdasarkan suhu.");
@@ -211,9 +210,15 @@ void kirimSuhu(uint16_t* rawData, int length) {
 
 BLYNK_WRITE(V12){
   ac = param.asInt();
-} 
+  if (ac == 0){
+    Serial.println("AC Manual");}
+  else if (ac ==1){
+    Serial.println("AC otomatisasi");
+  }
+  }
 
-//------Manual Kanopi -------------
+
+//------Manual Ac -------------
 BLYNK_WRITE(V23) {  
   if (ac == 0) {   // hanya manual
     kirimSuhu(rawNaik, sizeof(rawNaik) / sizeof(rawNaik[0]));
@@ -247,9 +252,7 @@ void otomatisasiAC(){
  }
 }}
 
-BLYNK_WRITE(V20) { kirimSuhu(rawNaik, sizeof(rawNaik) / sizeof(rawNaik[0])); }
-BLYNK_WRITE(V21) { kirimSuhu(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0])); }
-//UNTUK BLYNK BELUM DI SESUAIKAN V nya
+//------------------ FUNGSI KANOPI -------------
 
 BLYNK_WRITE(V10) {
   bool otomatisasiKanopi = param.asInt();
@@ -269,7 +272,7 @@ void luxx() {
 //------------------Manual Kanopi-------------------
 BLYNK_WRITE(V20) {
   
-  if (otomatisasiKanopi == 0) {   // hanya jalan kalau mode manual
+  if (otomatisasiKanopi == 0) {   
     int drajat  = param.asInt();
     kanopi.write(drajat);
     Serial.print("Drajat Kanopi (Manual Blynk): ");
