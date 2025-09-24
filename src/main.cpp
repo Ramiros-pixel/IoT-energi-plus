@@ -1,7 +1,8 @@
+struct tm timeinfo;
+#define BLYNK_TEMPLATE_ID "TMPL69Zqzpcu3"
+#define BLYNK_TEMPLATE_NAME "CAHAYA DARI TIMUR"
+#define BLYNK_AUTH_TOKEN "INLSAqCjxg9yYpxhsaQJ2pvbNsRhP_QH"
 
-#define BLYNK_TEMPLATE_ID "TMPL6fsU0p9IY"
-#define BLYNK_TEMPLATE_NAME "Smart Energy Plus Monitoring"
-#define BLYNK_AUTH_TOKEN "Z6HkJe8ogi0dMJOCQT3u2evirF-r3m2M"
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 IRsend irsend(13);
@@ -13,25 +14,37 @@ IRsend irsend(13);
 #include <HTTPClient.h>
 #include <Wire.h>
 #include "DHT.h"
+#include "time.h"
 #include <ESP32Servo.h>
 BlynkTimer timer;
+// ====== NTP Server & Zona Waktu ======
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 7 * 3600;  // GMT+7 = WIB
+const int daylightOffset_sec = 0;
+// ====== Servo & Jadwal Otomatisasi ======
+int pagiHour = 6;       // mulai 07:30
+int pagiMinute = 00;
+int siangHour = 11;       // berhenti 21:45
+int siangMinute = 30;
+int soreHour = 15;
+int soreMinute = 00;
+int stopHour = 18;
+int stopMinute =00;
 //-------------------Kode Hex IR AC-----------------------
-uint16_t rawNaik[] = {3456, 1724, 424, 472, 400, 1300, 420, 456};  // example
-uint16_t rawTurun[] = {3440, 1720, 420, 470, 402, 1300, 421, 457};  // example
+uint16_t rawNaik[] = {3456, 1724, 424, 472, 400, 1300, 420, 456};  
+uint16_t rawTurun[] = {3440, 1720, 420, 470, 402, 1300, 421, 457};  
 //-------------------KANOPI-----------------------------
-#define TH_RAIN 2900
-#define TH_DRY  3100
-const int FILTER_COUNT = 5;
-int sensorBuf[FILTER_COUNT];
-int bufIdx = 0;
-bool status_hujan = false;
+
 bool ac = false;
 unsigned long lastChangeTime = 0;
 const unsigned long debounceDelay = 3000; 
 
+int hour ;
+int minute;
+
 // ------------------ WIFI DAN BLYNK -------------------
-char ssid[] = "Mandala 106";
-char pass[] = "Nugraha1";
+char ssid[] = "ARZ";
+char pass[] = "akirey0109";
 // ---------define seluruh----------------------
 float suhu = 0;
 float hum = 0;
@@ -47,7 +60,6 @@ float temp_2 = 0;
 // ------------------ MH-Z19 -------------------
 #define RX_PIN 16
 #define TX_PIN 17
-
 //------------------ MH-Z19-2 -------------------
 #define RX_PIN2 32
 #define TX_PIN2 33
@@ -57,7 +69,7 @@ MHZ19 mhz19;
 MHZ19 mhz19_2;
 // ------------------ SENSOR DAN PIN -------------------
 #define PINDHT1 15
-#define PINDHT  2
+#define PINDHT  23
 #define tipeDHT DHT22
 #define relayy 4
 #define sensorHujan 34
@@ -76,27 +88,24 @@ float total = 0.0;
 float suhuacuan = 26.0;
 int i;
 
-const char spreadsheetId[] = "https://script.google.com/macros/s/AKfycbwa488LMfZ3V59DiYxDYr7m6zrMMdXpRyIhyWgJik9JbPfhoeZJWowqICzkwtlKIzAX3Q/exec";
+const char spreadsheetId[] = "https://script.google.com/macros/s/AKfycbx0_IaPwqeUzIFju1mWLxe3_BQmBBSBHmwwsXFwa9VVM1guz0b-Q5kEYFriBIA9mLEjpQ/exec";
 int otomatisasi = 0;          
-
-
-
 
 // ------------------ FUNGSI -------------------
 void kirimKeSpreadsheet(float suhu, float hum, float cdd,float lux,float co2, float temp,float celcius, float humadity, float co2_2, float temp_2) {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     String url = String(spreadsheetId);
-    url += "?suhu=" + String(suhu, 2);
-    url += "&hum=" + String(hum, 2);
-    url += "&cdd=" + String(cdd, 2);
+    url += "?suhu=" + String(suhu,2);
+    url += "&hum=" + String(hum,2);
+    url += "&cdd=" + String(cdd,2);
     url += "&lux=" + String(lux,2);
     url  += "&co2=" + String(co2,2);
     url += "&temp=" + String(temp,2);
     url += "&celcius=" + String(celcius,2);
     url += "&humadity=" + String(humadity,2);
-    url += "&co2_2=" + String(co2_2, 2);
-    url += "&temp_2=" + String(temp_2, 2);
+    url += "&co2_2=" + String(co2_2,2);
+    url += "&temp_2=" + String(temp_2,2);
 
     http.begin(url);
     int httpCode = http.GET();
@@ -106,6 +115,21 @@ void kirimKeSpreadsheet(float suhu, float hum, float cdd,float lux,float co2, fl
   } else {
     Serial.println("WiFi belum terkoneksi.");
   }
+}
+//debug
+
+bool updateTime(int &hour, int &minute) {
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("❌ Gagal ambil waktu dari NTP");
+    return false;
+  }
+  hour = timeinfo.tm_hour;
+  minute = timeinfo.tm_min;
+  Serial.print("✅ Waktu berhasil: ");
+  Serial.print(hour);
+  Serial.print(":");
+  Serial.println(minute);
+  return true;
 }
 
 //------------------ Fungsi Co2 -------------
@@ -166,8 +190,6 @@ float humadity1 = dht1.readHumidity();
   Blynk.virtualWrite(V0, celcius1);
   Blynk.virtualWrite(V1, humadity1);
 }
-
-
 //------------------ Fungsi CDD -------------
 void simpansuhu1() {
 suhu = dht1.readTemperature();
@@ -216,46 +238,51 @@ BLYNK_WRITE(V12){
     Serial.println("AC otomatisasi");
   }
   }
-
-
 //------Manual Ac -------------
 BLYNK_WRITE(V23) {  
-  if (ac == 0) {   // hanya manual
+  
+  bool tombol = param.asInt();
+  if (ac == 0) {
+    if (tombol == 1){   // hanya manual
     kirimSuhu(rawNaik, sizeof(rawNaik) / sizeof(rawNaik[0]));
     Serial.println("BLYNK -> Kanopi Naik (Manual)");
-  }
+  }}
 }
 
-BLYNK_WRITE(V22) {  
-  if (ac == 0) {   // hanya manual
+BLYNK_WRITE(V22) {
+  bool button = param.asInt();
+  if (ac == 0) {
+    if (button == 1){   // hanya manual
     kirimSuhu(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0]));
     Serial.println("BLYNK -> Kanopi Turun (Manual)");
-  }
+  }}
 }
 
 void otomatisasiAC(){
  float suhu = dht1.readTemperature();
- float acuan_suhu = cdd;
+ float suhuPanas = 26.5;
+ float suhuDingin = 25.5;
   if (ac == 1){
      if(millis()- lastChangeTime >= 300000){
-      if(suhu > acuan_suhu ){
+      if(suhu < suhuDingin){
         Serial.println("suhu akan dinaikan");
-        kirimSuhu(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0]));
-        lastChangeTime = millis();
-      }
-      else if(suhu < acuan_suhu){
-        Serial.println("suhu akan diturunkan");
         kirimSuhu(rawNaik, sizeof(rawNaik) / sizeof(rawNaik[0]));
         lastChangeTime = millis();
+        Blynk.virtualWrite(V21, "suhu AC naik");
+      }
+      else if(suhu > suhuPanas){
+        Serial.println("suhu akan diturunkan");
+        kirimSuhu(rawTurun, sizeof(rawTurun) / sizeof(rawTurun[0]));
+        lastChangeTime = millis();
+        Blynk.virtualWrite(V21, "suhu AC turun");
 
  }
  }
 }}
 
 //------------------ FUNGSI KANOPI -------------
-
-BLYNK_WRITE(V10) {
-  bool otomatisasiKanopi = param.asInt();
+BLYNK_WRITE(V4) {
+   otomatisasiKanopi = param.asInt();
 }
 
 
@@ -266,6 +293,7 @@ void luxx() {
     Blynk.virtualWrite(V8, "Sensor Error");
     return;
   }
+  Serial.print(lux);
   Blynk.virtualWrite(V8, lux);
 }
 
@@ -281,49 +309,83 @@ BLYNK_WRITE(V20) {
     Serial.println("Mode otomatis (sensor hujan aktif), kontrol Blynk diabaikan");
   }
 }
-void Sensorhujan() {
+void getWaktuSekarang(int &hour, int &minute) {
+  struct tm now;
+  if (getLocalTime(&now)) {
+    hour = now.tm_hour;
+    minute = now.tm_min;
+  } else {
+    Serial.println("❌ Gagal ambil waktu dari NTP");
+    hour = -1;  // tandai error
+    minute = -1;
+  }
+}
 
-  int hujan_sensor = analogRead(sensorHujan);
+//  Fungsi Sensor Hujan + Logika Kanopi
+void Sensorhujan() {
+  int hujan_sensor = digitalRead(sensorHujan);
   unsigned long currentMillis = millis();
 
+  int hour, minute;
+  getWaktuSekarang(hour, minute);   // selalu update waktu real
+
+  Serial.println("===== Sensor Hujan & Waktu =====");
   Serial.print("Nilai sensor hujan: ");
   Serial.println(hujan_sensor);
-  Serial.print("status_hujan: ");
-  Serial.println(status_hujan);
+  Serial.print("Jam sekarang: ");
+  Serial.print(hour);
+  Serial.print(":");
+  Serial.println(minute);
   Serial.print("Millis: ");
   Serial.println(currentMillis);
   Serial.print("LastChangeTime: ");
   Serial.println(lastChangeTime);
 
-  // HUJAN - Putar ke arah menutup
+  //  Kirim status hujan ke Blynk
+  if (hujan_sensor == 0) {
+    Blynk.virtualWrite(V13, "Terdeteksi hujan");
+  } else {
+    Blynk.virtualWrite(V13, "Terdeteksi tidak hujan");
+  }
 
-  if(otomatisasiKanopi == 1){
-    if (hujan_sensor <= 2000 && status_hujan == false && (currentMillis - lastChangeTime > debounceDelay)) {
-      Serial.println("Deteksi hujan || Menutup kanopi (putar servo)...");
-
-      kanopi.write(90); 
-      delay(2000);     
+  //  Kontrol otomatisasi kanopi
+  if (otomatisasiKanopi == 1) {
+    if (hujan_sensor == 0 && (currentMillis - lastChangeTime > debounceDelay)) {
+      Serial.println("Deteksi hujan || Menutup kanopi...");
       kanopi.write(10); 
-      Serial.println("Servo berhenti setelah menutup");
-
-      status_hujan = true;
+      Blynk.virtualWrite(V14, "Menutup (hujan)");
       lastChangeTime = currentMillis;
-    }
-  
-    // CERAH - Putar ke arah membuka
-    else if (hujan_sensor > 2000 && status_hujan == true && (currentMillis - lastChangeTime > debounceDelay)) {
-      Serial.println("Cerah || Membuka kanopi (putar servo)...");
+    } 
+    else if (hujan_sensor == 1 && (currentMillis - lastChangeTime > debounceDelay)) {
+      // Jadwal berdasarkan jam
+      if ((hour > pagiHour || (hour == pagiHour && minute >= pagiMinute)) &&
+          (hour < siangHour || (hour == siangHour && minute <= siangMinute))) {
+        kanopi.write(30);
+        Serial.println("pagi");
+        Blynk.virtualWrite(V14, "Pagi");
+      } 
+      else if ((hour > siangHour || (hour == siangHour && minute >= siangMinute)) &&
+               (hour < soreHour || (hour == soreHour && minute <= soreMinute))) {
+        kanopi.write(60);
+        Serial.println("Siang");
+        Blynk.virtualWrite(V14, "Siang");
+      } 
+      else if ((hour > soreHour || (hour == soreHour && minute >= soreMinute)) &&
+               (hour < stopHour || (hour == stopHour && minute <= stopMinute))) {
+        kanopi.write(90);
+        Serial.println("Sore");
+        Blynk.virtualWrite(V14, "Sore");
+      } 
+      else {
+        kanopi.write(0);
+        Serial.println("Malam");
+        Blynk.virtualWrite(V14, "Malam");
+      }
 
-      kanopi.write(10); 
-      delay(2000);       
-      kanopi.write(90);  
-      Serial.println("Servo berhenti setelah membuka");
-
-      status_hujan = false;
+      Serial.println(" Kanopi otomatis bergerak sesuai jadwal & cuaca");
       lastChangeTime = currentMillis;
     }
   }
-
 }
 
 void finaldata(){
@@ -345,15 +407,26 @@ void setup()
   mhz19.autoCalibration(false);
   mhz19_2.begin(mySerial2);
 
+  // Sinkronisasi waktu dari NTP
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  Serial.println("Sinkronisasi waktu...");
+
   dht.begin();
   dht1.begin();
 
   pinMode(relayy, OUTPUT);
   pinMode(sensorHujan, INPUT);
   kanopi.attach(Pin_kanopi);
-
   // Inisialisasi Blynk (sekali saja!)
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+     
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Gagal ambil waktu");
+    delay(2000);
+    return;
+  }
+  
+
 
   // Timer tugas
   timer.setInterval(60000L, finaldata);
